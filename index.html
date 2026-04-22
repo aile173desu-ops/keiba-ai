@@ -622,7 +622,21 @@ analyzeBtn.addEventListener('click', async () => {
   }
 });
 
-// ========== Gemini API: 429時に他モデルへ自動フォールバック ==========
+// ========== Gemini API: エラー時に他モデルへ自動フォールバック ==========
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function isRetryable(err) {
+  const m = String(err.message || '');
+  return /\b(429|500|502|503|504|UNAVAILABLE|overloaded|high demand|quota)\b/i.test(m);
+}
+function errorKind(err) {
+  const m = String(err.message || '').toLowerCase();
+  if (m.includes('429') || m.includes('quota')) return 'quota';
+  if (m.includes('503') || m.includes('overload') || m.includes('high demand')) return 'overload';
+  if (m.includes('500') || m.includes('502') || m.includes('504')) return 'server';
+  return 'other';
+}
+
 async function callGeminiWithFallback(userText) {
   const fallbackOrder = [
     state.model,
@@ -635,18 +649,44 @@ async function callGeminiWithFallback(userText) {
   const tryList = fallbackOrder.filter(m => { if (seen.has(m)) return false; seen.add(m); return true; });
 
   let lastError;
+  let attemptCount = 0;
+
   for (const model of tryList) {
-    try {
-      const result = await callGemini(userText, model);
-      if (model !== state.model) {
-        showToast(`✅ ${model} で成功(${state.model}はクォータ超過)`);
+    // 同じモデルで最大3回まで指数バックオフ付きリトライ(503対策)
+    const maxRetries = (model === tryList[0]) ? 3 : 2;
+    for (let retry = 0; retry < maxRetries; retry++) {
+      attemptCount++;
+      try {
+        const result = await callGemini(userText, model);
+        if (model !== state.model) {
+          showToast(`✅ ${model} で成功`);
+        }
+        return result;
+      } catch (err) {
+        lastError = err;
+        if (!isRetryable(err)) throw err;
+
+        const kind = errorKind(err);
+        const isLastAttemptForModel = retry === maxRetries - 1;
+        const isLastModel = model === tryList[tryList.length - 1];
+
+        let msg;
+        if (kind === 'overload') {
+          msg = `${model} が混雑中... ${isLastAttemptForModel && !isLastModel ? '別モデルへ切替中' : `再試行中 (${retry+1}/${maxRetries})`}`;
+        } else if (kind === 'quota') {
+          msg = `${model} は無料枠超過 → 別モデルへ切替中`;
+        } else {
+          msg = `${model} エラー → 再試行中 (${retry+1}/${maxRetries})`;
+        }
+        resultContent.innerHTML = `<div class="loading"><div class="spinner"></div><span>${msg}</span></div>`;
+
+        // quota超過なら即座に次のモデルへ
+        if (kind === 'quota') break;
+        // 過負荷/サーバーエラーは待ってから再試行(指数バックオフ)
+        if (!isLastAttemptForModel) {
+          await sleep(2000 * Math.pow(2, retry));  // 2s, 4s, 8s
+        }
       }
-      return result;
-    } catch (err) {
-      lastError = err;
-      const is429 = String(err.message || '').includes('429') || String(err.message || '').toLowerCase().includes('quota');
-      if (!is429) throw err;
-      resultContent.innerHTML = `<div class="loading"><div class="spinner"></div><span>${model}は無料枠超過 → 別モデルで再試行中...</span></div>`;
     }
   }
   throw lastError || new Error('すべてのモデルで失敗しました');
