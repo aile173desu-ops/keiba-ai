@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a7c3a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<title>🏇 競馬予想AI</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+  --green: #0a7c3a;
+  --green-dark: #075a28;
+  --gold: #d4a42e;
+  --bg: #f5f7f5;
+  --card: #ffffff;
+  --text: #1a2b1a;
+  --muted: #6b7c6b;
+  --border: #d8e0d8;
+  --danger: #c0392b;
+  --shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 16px; line-height: 1.6;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+header {
+  background: linear-gradient(135deg, var(--green), var(--green-dark));
+  color: white;
+  padding: calc(env(safe-area-inset-top) + 14px) 16px 14px;
+  position: sticky; top: 0; z-index: 10;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
+header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+header .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+main { padding: 16px; max-width: 720px; margin: 0 auto; }
+.card {
+  background: var(--card); border-radius: 14px;
+  padding: 16px; margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.card h2 {
+  margin: 0 0 12px; font-size: 15px; font-weight: 700;
+  color: var(--green-dark);
+  display: flex; align-items: center; gap: 8px;
+}
+.card h2 .num {
+  background: var(--green); color: white;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+.upload-btn {
+  display: block; width: 100%;
+  background: #eaf5ee; color: var(--green-dark);
+  border: 2px dashed var(--green); border-radius: 12px;
+  padding: 20px 16px; text-align: center;
+  font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.upload-btn:active { background: #d8ebde; }
+.upload-btn .icon { font-size: 36px; display: block; margin-bottom: 6px; }
+.upload-btn .hint { font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 4px; }
+input[type=file] { display: none; }
+#thumbnails {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; margin-top: 12px;
+}
+#thumbnails:empty { display: none; }
+.thumb {
+  position: relative; aspect-ratio: 3/4;
+  border-radius: 8px; overflow: hidden;
+  background: #eee;
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb .remove {
+  position: absolute; top: 4px; right: 4px;
+  background: rgba(0,0,0,.6); color: white;
+  border: none; border-radius: 50%;
+  width: 24px; height: 24px;
+  font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+input[type=text], input[type=password], select {
+  width: 100%; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+  font-size: 16px; font-family: inherit;
+  background: white; color: var(--text);
+}
+input:focus, select:focus { outline: 2px solid var(--green); border-color: var(--green); }
+.analyze-btn {
+  width: 100%; padding: 16px;
+  background: linear-gradient(135deg, var(--green), var(--green-dark));
+  color: white; border: none; border-radius: 12px;
+  font-size: 17px; font-weight: 700;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(10,124,58,.3);
+  transition: transform .1s;
+}
+.analyze-btn:active { transform: scale(0.98); }
+.analyze-btn:disabled {
+  background: #999; box-shadow: none;
+  cursor: not-allowed;
+}
+.secondary-btn {
+  background: none; border: none;
+  color: var(--muted); font-size: 13px;
+  padding: 8px; cursor: pointer;
+  text-decoration: underline;
+}
+details { margin-top: 12px; }
+details summary {
+  cursor: pointer; font-size: 13px;
+  color: var(--muted); padding: 4px 0;
+}
+.settings-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.settings-body label { font-size: 13px; color: var(--muted); display: block; margin: 10px 0 4px; }
+.settings-body .note {
+  font-size: 12px; color: var(--muted);
+  background: #fff9e6; padding: 8px 10px;
+  border-radius: 6px; margin-top: 6px;
+}
+.settings-body .note a { color: var(--green-dark); }
+
+#result-card { display: none; }
+#result-card.active { display: block; }
+.result-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.result-header h2 { margin: 0; }
+.result-actions { display: flex; gap: 6px; }
+.icon-btn {
+  background: #eaf5ee; border: none; border-radius: 8px;
+  padding: 8px 10px; font-size: 14px; cursor: pointer;
+  color: var(--green-dark);
+}
+#result-content {
+  font-size: 14px; line-height: 1.7;
+}
+#result-content h1, #result-content h2, #result-content h3 {
+  color: var(--green-dark); margin-top: 20px; margin-bottom: 8px;
+}
+#result-content h1 { font-size: 18px; }
+#result-content h2 { font-size: 16px; border-bottom: 2px solid var(--green); padding-bottom: 4px; }
+#result-content h3 { font-size: 15px; }
+#result-content table {
+  width: 100%; border-collapse: collapse; margin: 10px 0;
+  font-size: 13px;
+}
+#result-content th, #result-content td {
+  padding: 6px 8px; border: 1px solid var(--border);
+  text-align: left;
+}
+#result-content th { background: #eaf5ee; color: var(--green-dark); }
+#result-content code {
+  background: #f0f0f0; padding: 2px 6px;
+  border-radius: 4px; font-size: 13px;
+}
+#result-content pre {
+  background: #f0f0f0; padding: 10px; border-radius: 6px;
+  overflow-x: auto; font-size: 12px;
+}
+#result-content blockquote {
+  border-left: 3px solid var(--gold); margin: 10px 0;
+  padding: 4px 12px; color: var(--muted);
+}
+#result-content ul, #result-content ol { padding-left: 22px; }
+#result-content strong { color: var(--green-dark); }
+
+.loading {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--muted); font-size: 14px;
+  padding: 16px; justify-content: center;
+}
+.spinner {
+  width: 20px; height: 20px; border: 3px solid #ddd;
+  border-top-color: var(--green); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error {
+  background: #fde9e7; color: var(--danger);
+  padding: 12px; border-radius: 8px;
+  font-size: 14px; margin-top: 10px;
+  border-left: 4px solid var(--danger);
+}
+
+.history-item {
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.history-item:last-child { border-bottom: none; }
+.history-item .title { font-weight: 600; font-size: 14px; }
+.history-item .date { font-size: 12px; color: var(--muted); }
+#history-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 20px; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%;
+  transform: translateX(-50%); background: #333; color: white;
+  padding: 10px 16px; border-radius: 20px;
+  font-size: 14px; z-index: 100;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+}
+.toast.show { opacity: 1; }
+
+.guide {
+  background: #fffbe8; border-left: 4px solid var(--gold);
+  padding: 12px 14px; border-radius: 8px;
+  font-size: 13px; line-height: 1.6;
+}
+.guide strong { color: #8a6d11; }
+.guide ol { margin: 6px 0 0; padding-left: 20px; }
+
+@media (min-width: 640px) {
+  header h1 { font-size: 22px; }
+  #thumbnails { grid-template-columns: repeat(4, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏇 競馬予想AI</h1>
+  <div class="sub">JRA重賞を写真3枚で自動分析 · 完全無料</div>
+</header>
+
+<main>
+
+<div class="card">
+  <div class="guide">
+    <strong>📱 使い方(超カンタン)</strong>
+    <ol>
+      <li>JRAアプリで<b>レース情報・出馬表</b>のスクショを撮る</li>
+      <li>下の「写真を選ぶ」から<b>3〜6枚</b>アップロード</li>
+      <li>「AI分析する」ボタンを押すだけ!</li>
+    </ol>
+  </div>
+</div>
+
+<div class="card">
+  <h2><span class="num">1</span>写真をアップロード</h2>
+  <label for="file-input" class="upload-btn">
+    <span class="icon">📸</span>
+    写真を選ぶ / 撮影する
+    <div class="hint">レース詳細・出馬表前半・後半 の3枚が基本<br>(オッズ・調教・馬場状態もあれば精度UP)</div>
+  </label>
+  <input type="file" id="file-input" accept="image/*" multiple>
+  <div id="thumbnails"></div>
+</div>
+
+<div class="card">
+  <h2><span class="num">2</span>レース名(任意)</h2>
+  <input type="text" id="race-name" placeholder="例:皐月賞、ダービー、有馬記念 など">
+</div>
+
+<div class="card">
+  <h2><span class="num">3</span>要望を追加(任意)</h2>
+  <select id="request-preset">
+    <option value="default">おまかせ(マニュアル通り総合分析)</option>
+    <option value="budget1000">予算1,000円で買い目提案</option>
+    <option value="budget3000">予算3,000円で買い目提案</option>
+    <option value="budget5000">予算5,000円で買い目提案</option>
+    <option value="budget10000">予算10,000円で買い目提案</option>
+    <option value="anaonly">大穴重視で予想</option>
+    <option value="honmei">本命重視(堅実に)</option>
+    <option value="kyakushitsu">脚質別の最強馬を教えて</option>
+  </select>
+  <details>
+    <summary>詳しい要望を自由記入</summary>
+    <div class="settings-body">
+      <textarea id="extra-request" rows="3" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;" placeholder="例:馬連と3連複で組みたい、穴馬は3頭欲しい など"></textarea>
+    </div>
+  </details>
+</div>
+
+<button class="analyze-btn" id="analyze-btn">🔍 AI分析する</button>
+<div id="error-box"></div>
+
+<div class="card" id="result-card">
+  <div class="result-header">
+    <h2>📊 分析結果</h2>
+    <div class="result-actions">
+      <button class="icon-btn" id="copy-btn">📋 コピー</button>
+      <button class="icon-btn" id="share-btn">📤 共有</button>
+    </div>
+  </div>
+  <div id="result-content"></div>
+</div>
+
+<div class="card">
+  <h2>🕐 予想履歴</h2>
+  <div id="history-list"></div>
+  <button class="secondary-btn" id="clear-history" style="margin-top:8px;">履歴をすべて削除</button>
+</div>
+
+<div class="card">
+  <details>
+    <summary>⚙️ 初回設定(APIキー・モデル)</summary>
+    <div class="settings-body">
+      <label for="api-key">Google AI Studio APIキー(<b>完全無料</b>)</label>
+      <input type="password" id="api-key" placeholder="AIza...">
+      <div class="note">
+        ✅ <b>完全無料で使えます</b>(クレカ登録不要)<br>
+        取得先: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a><br>
+        ① Googleアカウントでログイン → ② 「Create API key」をクリック → ③ 表示されたキーをコピーしてここに貼り付け<br>
+        ※ APIキーはこの端末の中だけに保存されます(外部送信なし)<br>
+        📊 無料枠: 1日1500回 / 1分15回まで(通常使用では十分)
+      </div>
+      <label for="model-select" style="margin-top:14px;">使用モデル</label>
+      <select id="model-select">
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash(標準・高速・完全無料)</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash(最新・高精度・無料)</option>
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro(最高精度・無料枠狭い)</option>
+      </select>
+      <button class="secondary-btn" id="save-settings" style="margin-top:10px;">💾 設定を保存</button>
+    </div>
+  </details>
+</div>
+
+<div style="text-align:center;color:var(--muted);font-size:11px;padding:20px 0;">
+  🏇 競馬予想AI · Powered by Google Gemini(無料)<br>
+  <span id="version">v1.0</span>
+</div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ========== マニュアル本文(システムプロンプトに埋め込む) ==========
+const MANUAL = `あなたはJRA重賞レースの専門予想AIです。ユーザーがアップロードする写真(レース詳細・出馬表など)を解析し、以下のマニュアルに厳密に従って予想を出力してください。
+
+# 🏇 競馬予想マニュアル(JRA重賞用)
+
+## 1. 入力写真
+- レース基本情報(日付・コース・距離・天候・馬場・賞金)
+- 出馬表 前半(馬番1〜9頃)
+- 出馬表 後半(馬番10〜18頃)
+- オッズページ(あれば)
+- 調教タイム一覧(あれば)
+- 馬場状態詳細(あれば)
+
+## 2. 分析フロー
+### STEP 1: レース基本情報の整理
+- 距離・コース(右回り/左回り)・馬場状態
+- 天候・クラス・賞金規模
+
+### STEP 2: 各馬データ抽出
+- 前4走の着順・タイム・PCI・馬体重
+- 騎手・厩舎・血統(父・母父)
+- オッズと人気
+
+### STEP 3: 6軸評価
+| 軸 | 内容 |
+|---|---|
+| ① 能力 | 前走の着順・内容・タイム |
+| ② コース適性 | 当該コースの実績 |
+| ③ 血統 | 父・母父の距離/コース適性 |
+| ④ 枠順 | コース別の枠バイアス |
+| ⑤ 脚質 | 逃げ/先行/差し/追込 |
+| ⑥ オッズ妙味 | 実力とオッズのギャップ |
+
+### STEP 4: ローテーション評価
+主要トライアルの皐月賞/ダービー等への直結度をチェック
+
+### STEP 5: 総合ランキング作成(◎○▲△)
+
+### STEP 6: 買い目提案
+
+## 3. 出力フォーマット(必ずこの順序・見出しで出力)
+
+### 🏇 レース情報
+- レース名・日付・コース・距離・馬場
+
+### 🏆 最有力ランキング(TOP10)
+- ◎本命、○対抗、▲単穴、△押さえ
+- 各馬の根拠を**3〜5行**で
+
+### 🎯 脚質別分類
+- 逃げ/先行/差し/追込別の注目馬
+
+### 📐 枠順バイアス分析
+- 好枠・減点枠の評価
+
+### 💎 大穴ピックアップ(オッズ妙味重視)
+- 20〜50倍の穴馬を3〜4頭
+
+### 🎫 買い目提案
+- 馬連フォーメーション
+- 3連複マルチ
+- ワイド3点
+- 予算別推奨(指定がなければ1,000円/3,000円/5,000円/10,000円の4パターン)
+
+### 📝 総評
+- レース展開予想と最終結論(200〜300字)
+
+## 4. ユーザーの予想スタイル
+- オッズに関係なく**実力重視**で評価
+- **高確率×高単価**のバランスを好む
+- 本命のみではなく**大穴も入れた組み立て**を希望
+- 先行馬・差し馬など**脚質別の最強馬**も知りたい
+- 血統・コース適性・枠順など多角的分析を重視
+
+## 5. 重要な評価基準
+### 中山2000m(皐月賞)
+- スタート→1角400m=内枠有利
+- 最後の急坂=スタミナ必須
+- 好位先行が有利
+- 血統:ディープ系・ロベルト系・キングマンボ系が好走
+
+### 東京2400m(ダービー・オークス)
+- 長い直線=差し有利
+- 血統:ディープ系・ノーザンダンサー系
+
+## 6. 注意事項
+- 写真から読み取れる情報のみで判断する(憶測で数字を捏造しない)
+- 読めない馬がある場合は「判別不可」と明記
+- 必ず markdown 形式で出力
+- 表(table)を積極的に使って見やすく
+- 結論は明確に(曖昧にしない)`;
+
+// ========== 状態管理 ==========
+const state = {
+  images: [],   // {id, b64, mediaType, name}
+  history: JSON.parse(localStorage.getItem('keiba_history') || '[]'),
+  apiKey: localStorage.getItem('keiba_apikey') || '',
+  model: localStorage.getItem('keiba_model') || 'gemini-2.0-flash',
+};
+
+// ========== DOM ==========
+const $ = (id) => document.getElementById(id);
+const fileInput = $('file-input');
+const thumbnails = $('thumbnails');
+const analyzeBtn = $('analyze-btn');
+const raceNameInput = $('race-name');
+const requestPreset = $('request-preset');
+const extraRequest = $('extra-request');
+const resultCard = $('result-card');
+const resultContent = $('result-content');
+const errorBox = $('error-box');
+const apiKeyInput = $('api-key');
+const modelSelect = $('model-select');
+const saveSettingsBtn = $('save-settings');
+const historyList = $('history-list');
+const clearHistoryBtn = $('clear-history');
+const copyBtn = $('copy-btn');
+const shareBtn = $('share-btn');
+const toast = $('toast');
+
+// ========== 初期化 ==========
+// 旧Claudeモデル→Geminiへ移行
+if (state.model && state.model.startsWith('claude-')) {
+  state.model = 'gemini-2.0-flash';
+  localStorage.setItem('keiba_model', state.model);
+  state.apiKey = '';
+  localStorage.removeItem('keiba_apikey');
+}
+apiKeyInput.value = state.apiKey;
+modelSelect.value = state.model;
+renderHistory();
+
+// ========== 画像アップロード ==========
+fileInput.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  for (const file of files) {
+    try {
+      const b64 = await fileToCompressedBase64(file);
+      const id = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      state.images.push({
+        id,
+        b64,
+        mediaType: 'image/jpeg',
+        name: file.name,
+      });
+    } catch (err) {
+      console.error(err);
+      showError('画像の読み込みに失敗しました: ' + file.name);
+    }
+  }
+  fileInput.value = '';
+  renderThumbnails();
+});
+
+async function fileToCompressedBase64(file, maxDim = 1600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, maxDim / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderThumbnails() {
+  thumbnails.innerHTML = '';
+  state.images.forEach((img) => {
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.innerHTML = `
+      <img src="data:${img.mediaType};base64,${img.b64}" alt="">
+      <button class="remove" data-id="${img.id}" aria-label="削除">✕</button>
+    `;
+    thumbnails.appendChild(div);
+  });
+  thumbnails.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.target.dataset.id;
+      state.images = state.images.filter(i => i.id !== id);
+      renderThumbnails();
+    });
+  });
+}
+
+// ========== 設定保存 ==========
+saveSettingsBtn.addEventListener('click', () => {
+  state.apiKey = apiKeyInput.value.trim();
+  state.model = modelSelect.value;
+  localStorage.setItem('keiba_apikey', state.apiKey);
+  localStorage.setItem('keiba_model', state.model);
+  showToast('✅ 設定を保存しました');
+});
+
+// ========== 分析実行 ==========
+analyzeBtn.addEventListener('click', async () => {
+  errorBox.innerHTML = '';
+
+  // 事前チェック
+  if (!state.apiKey) {
+    showError('⚠️ 最初にAPIキーを設定してください(ページ下部の「初回設定」)');
+    return;
+  }
+  if (state.images.length === 0) {
+    showError('⚠️ 写真を1枚以上アップロードしてください');
+    return;
+  }
+
+  // リクエスト文構築
+  const raceName = raceNameInput.value.trim();
+  const presetMap = {
+    default: 'マニュアル通りに総合分析してください。',
+    budget1000: '予算1,000円での買い目を中心に提案してください。',
+    budget3000: '予算3,000円での買い目を中心に提案してください。',
+    budget5000: '予算5,000円での買い目を中心に提案してください。',
+    budget10000: '予算10,000円での買い目を中心に提案してください。大穴も組み込んでください。',
+    anaonly: '大穴重視で、20〜50倍の穴馬を中心に予想してください。的中時の回収率を重視します。',
+    honmei: '本命重視で、堅実な買い目を中心に組んでください。的中率を優先します。',
+    kyakushitsu: '脚質別(逃げ・先行・差し・追込)の最強馬を中心に分析してください。',
+  };
+  const preset = presetMap[requestPreset.value] || presetMap.default;
+  const extra = extraRequest.value.trim();
+  const userText = [
+    `${raceName || 'このレース'}の予想をお願いします。`,
+    preset,
+    extra && `追加要望: ${extra}`,
+  ].filter(Boolean).join('\n');
+
+  // UI: ローディング
+  analyzeBtn.disabled = true;
+  analyzeBtn.textContent = '🔍 分析中...';
+  resultCard.classList.add('active');
+  resultContent.innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <span>写真を読み取ってAIが予想中...(30〜90秒)</span>
+    </div>
+  `;
+  resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    const fullText = await callGemini(userText);
+    renderResult(fullText);
+    saveToHistory({
+      title: raceName || '無題レース',
+      date: new Date().toISOString(),
+      content: fullText,
+      imageCount: state.images.length,
+    });
+  } catch (err) {
+    console.error(err);
+    resultContent.innerHTML = '';
+    showError('❌ 分析に失敗しました: ' + (err.message || err));
+  } finally {
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = '🔍 AI分析する';
+  }
+});
+
+// ========== Gemini API呼び出し(ストリーミング) ==========
+async function callGemini(userText) {
+  const parts = [];
+  for (const img of state.images) {
+    parts.push({
+      inline_data: { mime_type: img.mediaType, data: img.b64 },
+    });
+  }
+  parts.push({ text: userText });
+
+  const body = {
+    system_instruction: { parts: [{ text: MANUAL }] },
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    },
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(state.apiKey)}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    let msg = errText;
+    try {
+      const j = JSON.parse(errText);
+      msg = j.error?.message || errText;
+    } catch(_) {}
+    throw new Error(`API Error ${res.status}: ${msg.slice(0, 300)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  resultContent.innerHTML = '<div id="stream-out"></div>';
+  const streamOut = $('stream-out');
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (!data || data === '[DONE]') continue;
+      try {
+        const evt = JSON.parse(data);
+        const cand = evt.candidates?.[0];
+        const chunks = cand?.content?.parts || [];
+        for (const p of chunks) {
+          if (typeof p.text === 'string') fullText += p.text;
+        }
+        if (chunks.length > 0) {
+          streamOut.innerHTML = marked.parse(fullText);
+          resultCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+        if (cand?.finishReason && cand.finishReason !== 'STOP' && cand.finishReason !== 'MAX_TOKENS') {
+          throw new Error(`生成停止: ${cand.finishReason}`);
+        }
+      } catch (e) {
+        if (e.message?.startsWith('生成停止')) throw e;
+      }
+    }
+  }
+  if (!fullText) throw new Error('応答が空でした。写真が読み取れなかった可能性があります。');
+  return fullText;
+}
+
+function renderResult(text) {
+  resultContent.innerHTML = marked.parse(text);
+}
+
+// ========== 履歴 ==========
+function saveToHistory(item) {
+  state.history.unshift(item);
+  state.history = state.history.slice(0, 20);
+  localStorage.setItem('keiba_history', JSON.stringify(state.history));
+  renderHistory();
+}
+
+function renderHistory() {
+  if (state.history.length === 0) {
+    historyList.innerHTML = '<div id="history-empty">まだ履歴がありません</div>';
+    return;
+  }
+  historyList.innerHTML = '';
+  state.history.forEach((item, i) => {
+    const d = new Date(item.date);
+    const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <div class="title">${escapeHtml(item.title)}</div>
+      <div class="date">${dateStr} · 写真${item.imageCount}枚</div>
+    `;
+    div.addEventListener('click', () => {
+      resultCard.classList.add('active');
+      renderResult(item.content);
+      resultCard.scrollIntoView({ behavior: 'smooth' });
+    });
+    historyList.appendChild(div);
+  });
+}
+
+clearHistoryBtn.addEventListener('click', () => {
+  if (!confirm('履歴をすべて削除しますか?')) return;
+  state.history = [];
+  localStorage.removeItem('keiba_history');
+  renderHistory();
+  showToast('🗑️ 履歴を削除しました');
+});
+
+// ========== 共有・コピー ==========
+copyBtn.addEventListener('click', () => {
+  const text = resultContent.innerText;
+  navigator.clipboard.writeText(text).then(() => showToast('📋 コピーしました'));
+});
+shareBtn.addEventListener('click', async () => {
+  const text = resultContent.innerText;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: '競馬予想', text });
+    } catch (_) {}
+  } else {
+    navigator.clipboard.writeText(text).then(() => showToast('📋 クリップボードにコピーしました'));
+  }
+});
+
+// ========== ユーティリティ ==========
+function showError(msg) {
+  errorBox.innerHTML = `<div class="error">${escapeHtml(msg)}</div>`;
+}
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+
+</body>
+</html>
